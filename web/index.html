@@ -651,6 +651,9 @@ function fmtDuration(s) {
     const aero = s.aerobic_ratio == null
       ? '— '
       : Math.round(s.aerobic_ratio * 100) + ' : ' + Math.round((s.anaerobic_ratio || 0) * 100);
+    const tokenLabel = s.token_source === 'hermes_state_db'
+      ? 'Token 消耗（真实）'
+      : 'Token 消耗（估算）';
     const items = [
       { k: '独立访客', v: fmtNum(s.visitors) },
       { k: '已分析 API Key', v: fmtNum(s.unique_keys) },
@@ -658,7 +661,7 @@ function fmtDuration(s) {
       { k: '人均报告数', v: s.avg_jobs_per_key.toFixed(2), u: '次' },
       { k: '平均覆盖天数', v: s.avg_days_per_report, u: '天' },
       { k: '有氧 : 力量', v: aero },
-      { k: '估算 Token 消耗', v: fmtTokens(s.est_tokens_total) },
+      { k: tokenLabel, v: fmtTokens(s.est_tokens_total) },
       { k: '单份 Token', v: fmtTokens(s.est_tokens_per_report) },
       { k: '平均生成耗时', v: fmtDuration(s.avg_duration_seconds) },
     ];

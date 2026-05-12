@@ -59,7 +59,13 @@ def generate_commentary(report_data: dict, out_path: Path, timeout: int = 90) ->
         "pr_keys": list(report_data.get("pr_progression", {}).keys()),
         "insights": report_data.get("insights", []),
     }
-    prompt = PROMPT + json.dumps(compact, ensure_ascii=False, indent=2)
+    from app.hermes_usage import make_sentinel, lookup_usage
+    sentinel = make_sentinel()
+    prompt = (
+        PROMPT
+        + json.dumps(compact, ensure_ascii=False, indent=2)
+        + f"\n\n<!-- {sentinel} -->"
+    )
 
     # Locate hermes binary (systemd PATH may not include ~/.local/bin)
     import os, shutil as _sh
@@ -157,6 +163,7 @@ def generate_commentary(report_data: dict, out_path: Path, timeout: int = 90) ->
     parsed["_meta"] = {
         "prompt_chars": len(prompt),
         "response_chars": len(raw),
+        "usage": lookup_usage(sentinel),
     }
     return parsed
 

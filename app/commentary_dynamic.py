@@ -144,7 +144,13 @@ def generate_dynamic_commentary(
         "session_samples": sampled,
         "insights_python": report_data.get("insights", []),
     }
-    prompt = PROMPT + json.dumps(packet, ensure_ascii=False, indent=2)
+    from app.hermes_usage import make_sentinel, lookup_usage
+    sentinel = make_sentinel()
+    prompt = (
+        PROMPT
+        + json.dumps(packet, ensure_ascii=False, indent=2)
+        + f"\n\n<!-- {sentinel} -->"
+    )
 
     hermes_bin = (
         os.environ.get("HERMES_BIN")
@@ -234,6 +240,7 @@ def generate_dynamic_commentary(
     parsed["_meta"] = {
         "prompt_chars": len(prompt),
         "response_chars": len(raw),
+        "usage": lookup_usage(sentinel),
     }
     return parsed
 

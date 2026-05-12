@@ -188,6 +188,13 @@ def run_pipeline(api_key: str, start: str, end: str, gap: float = 1.3,
     if c_meta:
         update_fields["prompt_chars"] = c_meta.get("prompt_chars")
         update_fields["response_chars"] = c_meta.get("response_chars")
+        usage = c_meta.get("usage")
+        if usage:
+            update_fields["input_tokens"] = usage.get("input_tokens")
+            update_fields["output_tokens"] = usage.get("output_tokens")
+            update_fields["cache_read_tokens"] = usage.get("cache_read_tokens")
+            update_fields["reasoning_tokens"] = usage.get("reasoning_tokens")
+            update_fields["estimated_cost_usd"] = usage.get("estimated_cost_usd")
     # Drop None values to avoid blowing up on schema (storage.update_job uses
     # whatever you give it as a SQL SET column).
     update_fields = {k: v for k, v in update_fields.items() if v is not None}

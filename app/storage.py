@@ -94,6 +94,11 @@ def init_db():
         "prompt_chars INTEGER",
         "response_chars INTEGER",
         "duration_seconds REAL",
+        "input_tokens INTEGER",
+        "output_tokens INTEGER",
+        "cache_read_tokens INTEGER",
+        "reasoning_tokens INTEGER",
+        "estimated_cost_usd REAL",
     ):
         try:
             conn.execute(f"ALTER TABLE jobs ADD COLUMN {col}")
@@ -289,11 +294,29 @@ def get_global_stats() -> dict:
         "SELECT COALESCE(SUM(prompt_chars),0), COALESCE(SUM(response_chars),0), "
         "COUNT(*) FILTER (WHERE prompt_chars IS NOT NULL) FROM jobs WHERE status='done'"
     ).fetchone()
-    prompt_chars_total, response_chars_total, n_with_tokens = pc
+    prompt_chars_total, response_chars_total, n_with_chars = pc
     total_chars = (prompt_chars_total or 0) + (response_chars_total or 0)
-    # Token estimate: CJK-heavy text ~ chars/1.8. Use /2 conservatively.
-    est_tokens_total = int(total_chars / 2) if total_chars else 0
-    est_tokens_per_report = int(est_tokens_total / n_with_tokens) if n_with_tokens else 0
+    est_tokens_from_chars = int(total_chars / 2) if total_chars else 0
+
+    # Real token usage from hermes state.db (preferred when available)
+    rt = c.execute(
+        "SELECT COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), "
+        "COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(reasoning_tokens),0), "
+        "COALESCE(SUM(estimated_cost_usd),0), "
+        "COUNT(*) FILTER (WHERE input_tokens IS NOT NULL) "
+        "FROM jobs WHERE status='done'"
+    ).fetchone()
+    in_tok, out_tok, cache_tok, reason_tok, cost_usd, n_with_real = rt
+    real_tokens_total = (in_tok or 0) + (out_tok or 0) + (reason_tok or 0)
+
+    if n_with_real:
+        tokens_total = real_tokens_total
+        tokens_per_report = int(real_tokens_total / n_with_real)
+        token_source = "hermes_state_db"
+    else:
+        tokens_total = est_tokens_from_chars
+        tokens_per_report = int(est_tokens_from_chars / n_with_chars) if n_with_chars else 0
+        token_source = "char_estimate"
 
     avg_duration_s = c.execute(
         "SELECT AVG(duration_seconds) FROM jobs WHERE status='done' AND duration_seconds IS NOT NULL"
@@ -309,7 +332,9 @@ def get_global_stats() -> dict:
         "avg_jobs_per_key": round(avg_jobs_per_key, 2),
         "aerobic_ratio": round(aerobic_ratio, 3) if aerobic_ratio is not None else None,
         "anaerobic_ratio": round(1 - aerobic_ratio, 3) if aerobic_ratio is not None else None,
-        "est_tokens_total": est_tokens_total,
-        "est_tokens_per_report": est_tokens_per_report,
+        "est_tokens_total": tokens_total,
+        "est_tokens_per_report": tokens_per_report,
+        "token_source": token_source,
+        "estimated_cost_usd": round(cost_usd, 4) if cost_usd else 0,
         "avg_duration_seconds": round(avg_duration_s, 1) if avg_duration_s else 0,
     }
