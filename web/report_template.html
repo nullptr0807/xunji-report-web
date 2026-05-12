@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>训记 · 训练分析报告</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  :root {
+    --bg-primary: #f5f5f7;
+    --bg-card: rgba(255,255,255,0.50);
+    --bg-card-strong: rgba(255,255,255,0.70);
+    --border-card: rgba(255,255,255,0.5);
+    --ink: #1d1d1f;
+    --ink-2: rgba(0,0,0,0.58);
+    --ink-3: rgba(0,0,0,0.36);
+    --accent: #C8553D;
+    --accent-2: #8FA98E;
+    --accent-3: #5C6B73;
+    --accent-4: #D4A574;
+    --positive: #1f9d55;
+    --radius: 18px;
+    --font: 'Inter','SF Pro Display','PingFang SC','Microsoft YaHei',-apple-system,BlinkMacSystemFont,sans-serif;
+  }
+  *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: var(--font);
+    background: linear-gradient(180deg, #fafafc 0%, #f0f1f5 100%);
+    color: var(--ink);
+    min-height: 100vh;
+    background-attachment: fixed;
+    position: relative;
+    padding: 32px 20px 60px;
+  }
+  body::before {
+    content:''; position: fixed; inset: -10vmax; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(36vmax 36vmax at 14% 16%, rgba(200,85,61,0.32), transparent 60%),
+      radial-gradient(34vmax 34vmax at 86% 20%, rgba(143,169,142,0.30), transparent 60%),
+      radial-gradient(40vmax 40vmax at 78% 86%, rgba(212,165,116,0.30), transparent 60%),
+      radial-gradient(32vmax 32vmax at 18% 84%, rgba(92,107,115,0.22), transparent 60%);
+    filter: blur(30px) saturate(135%);
+  }
+  body::after {
+    content:''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: radial-gradient(rgba(0,0,0,0.025) 1px, transparent 1px);
+    background-size: 32px 32px; opacity: 0.5;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; position: relative; z-index: 1; }
+
+  .glass {
+    background: var(--bg-card);
+    backdrop-filter: blur(36px) saturate(180%); -webkit-backdrop-filter: blur(36px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.55);
+    border-radius: var(--radius);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.95) inset,
+      0 0 0 0.5px rgba(0,0,0,0.04),
+      0 18px 48px rgba(31,38,72,0.10);
+    padding: 28px;
+    margin-bottom: 20px;
+    position: relative;
+  }
+  .glass::before {
+    content:''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: linear-gradient(135deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 45%);
+  }
+  .glass > * { position: relative; z-index: 1; }
+
+  .hero { text-align: center; padding: 36px 20px; }
+  .hero .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-2); margin-bottom: 10px; }
+  .hero .title { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; }
+  .hero .range { color: var(--ink-2); margin-top: 6px; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .hero .big {
+    font-size: 56px; font-weight: 800; margin-top: 22px; letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(135deg, var(--accent), var(--accent-4));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    line-height: 1.1;
+  }
+  .hero .big-sub { color: var(--ink-2); font-size: 14px; margin-top: 4px; }
+
+  .stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 28px;
+  }
+  .stat {
+    background: rgba(255,255,255,0.5);
+    border-radius: 12px;
+    padding: 16px 14px;
+    border: 1px solid rgba(0,0,0,0.04);
+  }
+  .stat .l { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
+  .stat .v { font-size: 22px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .stat .s { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+
+  h2 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--ink-2); margin-bottom: 16px; font-weight: 600;
+  }
+  .chart-card .chart-title { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 4px; }
+  .chart-card .chart-sub { color: var(--ink-2); font-size: 13px; margin-bottom: 18px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 14px; }
+  .legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+  .legend-item strong { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; margin-left: 2px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+  .chart-host { width: 100%; height: 320px; }
+  .chart-host.tall { height: 360px; }
+
+  /* 日历热力图 */
+  .cal { overflow-x: auto; padding-bottom: 4px; }
+  .cal svg { display: block; }
+
+  /* Top 动作横向柱 */
+  .bars { display: flex; flex-direction: column; gap: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+  .bar-name { flex: 0 0 130px; color: var(--ink); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-track { flex: 1; height: 22px; background: rgba(0,0,0,0.04); border-radius: 6px; overflow: hidden; position: relative; }
+  .bar-fill {
+    height: 100%; border-radius: 6px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-4));
+    transition: width 0.6s cubic-bezier(0.25,0.46,0.45,0.94);
+  }
+  .bar-val { flex: 0 0 44px; text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; font-size: 13px; }
+
+  /* PR 列表 */
+  .pr-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .pr {
+    padding: 12px 14px; border-radius: 10px;
+    background: rgba(255,255,255,0.45);
+    border: 1px solid rgba(0,0,0,0.04);
+  }
+  .pr .pr-kw { font-size: 12px; color: var(--ink-2); }
+  .pr .pr-val { font-size: 17px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; color: var(--accent); }
+  .pr .pr-ex { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+
+  /* 周内分布 mini bar */
+  .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-top: 6px; }
+  .week .col { text-align: center; }
+  .week .wb {
+    width: 100%; background: rgba(0,0,0,0.04); border-radius: 6px; position: relative;
+    height: 80px; display: flex; align-items: flex-end; overflow: hidden;
+  }
+  .week .wb-fill {
+    width: 100%;
+    background: linear-gradient(180deg, var(--accent-2), #b8d0b6);
+    border-radius: 6px;
+    transition: height 0.5s ease;
+  }
+  .week .wl { font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+  .week .wv { font-size: 12px; color: var(--ink); font-weight: 600; margin-top: 2px; }
+
+  /* Insights */
+  .insights li { padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.06); font-size: 15px; line-height: 1.6; list-style: none; }
+  .insights li:last-child { border-bottom: none; }
+  .insights li::before { content:'·'; color: var(--accent); margin-right: 10px; font-weight: 700; }
+
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin: 20px 0 8px; }
+  .btn {
+    padding: 12px 22px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.08);
+    background: rgba(255,255,255,0.72); color: var(--ink); font-size: 14px; font-weight: 600;
+    cursor: pointer; font-family: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+    transition: 0.2s;
+  }
+  .btn:hover { background: #fff; transform: translateY(-1px); }
+  .btn.primary { background: var(--ink); color: #fff; border-color: transparent; }
+  .btn.primary:hover { background: #000; }
+
+  footer { text-align: center; color: var(--ink-3); font-size: 12px; margin-top: 30px; }
+  footer a { color: var(--ink-2); text-decoration: none; }
+
+  @media (max-width: 720px) {
+    body { padding: 16px 12px 40px; }
+    .glass { padding: 20px 16px; border-radius: 14px; }
+    .hero .big { font-size: 42px; }
+    .hero .title { font-size: 22px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .pr-grid { grid-template-columns: 1fr; }
+    .bar-name { flex: 0 0 100px; font-size: 12px; }
+    .week { gap: 4px; }
+    .week .wb { height: 60px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="glass hero">
+    <div class="label">训记 · 训练分析报告</div>
+    <div class="title" id="title">分析报告</div>
+    <div class="range" id="range">—</div>
+    <div class="big" id="bigVolume">—</div>
+    <div class="big-sub">累计训练容量（kg·次）</div>
+
+    <div class="stats">
+      <div class="stat"><div class="l">训练日数</div><div class="v" id="s-days">—</div><div class="s" id="s-freq">—</div></div>
+      <div class="stat"><div class="l">训练时长</div><div class="v" id="s-hours">—</div><div class="s">小时</div></div>
+      <div class="stat"><div class="l">总组数</div><div class="v" id="s-sets">—</div><div class="s" id="s-reps">—</div></div>
+      <div class="stat"><div class="l">最长连续</div><div class="v" id="s-streak">—</div><div class="s">天</div></div>
+    </div>
+
+    <div class="actions">
+      <a class="btn primary" id="dlBtn" href="#" download>下载长图分享</a>
+      <button class="btn" id="copyBtn">复制分享链接</button>
+    </div>
+  </div>
+
+  <div class="glass chart-card">
+    <div class="chart-title">训练容量趋势</div>
+    <div class="chart-sub">每次训练的总容量（kg·次），蓝线为 7 次滑动均值</div>
+    <div class="chart-host" id="chart-volume"></div>
+  </div>
+
+  <div class="glass chart-card">
+    <div class="chart-title">主项 e1RM 累积曲线</div>
+    <div class="chart-sub">基于 Epley 公式估算的等效 1RM，按动作分别取每日最高再累积</div>
+    <div class="legend" id="pr-legend"></div>
+    <div class="chart-host tall" id="chart-pr"></div>
+  </div>
+
+  <div class="glass chart-card">
+    <div class="chart-title">每日训练强度</div>
+    <div class="chart-sub">颜色越深表示当日训练容量越大，灰色为休息日</div>
+    <div class="cal" id="cal"></div>
+  </div>
+
+  <div class="glass chart-card">
+    <div class="chart-title">周内分布</div>
+    <div class="chart-sub">你更习惯在一周的哪几天训练</div>
+    <div class="week" id="week"></div>
+  </div>
+
+  <div class="glass chart-card">
+    <div class="chart-title">最常做的动作 Top 20</div>
+    <div class="chart-sub">按出现次数排序</div>
+    <div class="bars" id="bars"></div>
+  </div>
+
+  <div class="glass chart-card">
+    <div class="chart-title">主项历史最佳</div>
+    <div class="chart-sub">每个动作的历史最高重量记录</div>
+    <div class="pr-grid" id="prs"></div>
+  </div>
+
+  <div class="glass chart-card">
+    <div class="chart-title">数据点评</div>
+    <div class="chart-sub">基于规则的自动观察</div>
+    <ul class="insights" id="insights"></ul>
+  </div>
+
+  <footer>
+    由 <a href="../../" >xunji-report-web</a> 生成 · <span id="gen-at"></span>
+    · <a href="https://github.com/" id="gh-link" target="_blank">GitHub</a>
+  </footer>
+</div>
+
+<script>
+(async function() {
+  const data = await fetch('report_data.json').then(r => r.json());
+  const s = data.summary;
+
+  document.getElementById('title').textContent = '训练分析报告';
+  document.getElementById('range').textContent =
+    s.date_start + ' → ' + s.date_end + ' · 共 ' + s.span_days + ' 天';
+  document.getElementById('bigVolume').textContent =
+    Math.round(s.total_volume_kg).toLocaleString();
+  document.getElementById('s-days').textContent = s.training_days;
+  document.getElementById('s-freq').textContent = '每周 ' + s.avg_per_week + ' 次';
+  document.getElementById('s-hours').textContent = s.total_hours;
+  document.getElementById('s-sets').textContent = s.total_sets.toLocaleString();
+  document.getElementById('s-reps').textContent = s.total_reps.toLocaleString() + ' 次';
+  document.getElementById('s-streak').textContent = s.longest_streak || 1;
+  document.getElementById('gen-at').textContent = data.generated_at.slice(0, 16).replace('T',' ') + ' UTC';
+
+  // Snapshot link
+  const path = location.pathname; // /xunji/report/<job_id>/
+  document.getElementById('dlBtn').href = 'snapshot.jpg';
+  document.getElementById('copyBtn').onclick = () => {
+    navigator.clipboard.writeText(location.href.replace(/\?.*$/, ''));
+    const btn = document.getElementById('copyBtn');
+    const old = btn.textContent;
+    btn.textContent = '已复制 ✓';
+    setTimeout(() => btn.textContent = old, 1800);
+  };
+
+  // ===== lightweight-charts: volume =====
+  const chartOpts = {
+    layout: { background: { type: 'solid', color: 'transparent' }, textColor: 'rgba(0,0,0,0.6)', fontFamily: getComputedStyle(document.body).fontFamily },
+    grid: { vertLines: { color: 'rgba(0,0,0,0.05)' }, horzLines: { color: 'rgba(0,0,0,0.05)' } },
+    rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.15, bottom: 0.10 } },
+    timeScale: { borderVisible: false, fixLeftEdge: true, fixRightEdge: true },
+    crosshair: { mode: 1 },
+    handleScroll: false, handleScale: false,
+  };
+
+  const volEl = document.getElementById('chart-volume');
+  const vc = LightweightCharts.createChart(volEl, { ...chartOpts, width: volEl.clientWidth, height: 320 });
+  const volSeries = vc.addAreaSeries({
+    lineColor: '#C8553D', topColor: 'rgba(200,85,61,0.35)', bottomColor: 'rgba(200,85,61,0.02)', lineWidth: 2,
+    lastValueVisible: false, priceLineVisible: false,
+  });
+  volSeries.setData(data.volume_series);
+  const maSeries = vc.addLineSeries({ color: '#5C6B73', lineWidth: 2, lastValueVisible: false, priceLineVisible: false });
+  maSeries.setData(data.volume_ma_series);
+  vc.timeScale().fitContent();
+
+  // ===== PR e1RM multi-line =====
+  const prEl = document.getElementById('chart-pr');
+  const pc = LightweightCharts.createChart(prEl, { ...chartOpts, width: prEl.clientWidth, height: 360 });
+  const colors = ['#C8553D', '#8FA98E', '#5C6B73', '#D4A574', '#7A5A9E'];
+  const legendEl = document.getElementById('pr-legend');
+  let i = 0;
+  for (const [kw, series] of Object.entries(data.pr_progression)) {
+    const c = colors[i % colors.length];
+    const s = pc.addLineSeries({
+      color: c, lineWidth: 2, title: kw,
+      lastValueVisible: false, priceLineVisible: false,
+    });
+    s.setData(series);
+    const last = series[series.length - 1];
+    const item = document.createElement('span');
+    item.className = 'legend-item';
+    item.innerHTML = `<span class="legend-dot" style="background:${c}"></span>${kw} <strong>${last.value.toFixed(1)}</strong>`;
+    legendEl.appendChild(item);
+    i++;
+  }
+  pc.timeScale().fitContent();
+
+  // Resize
+  window.addEventListener('resize', () => {
+    vc.applyOptions({ width: volEl.clientWidth });
+    pc.applyOptions({ width: prEl.clientWidth });
+  });
+
+  // ===== Calendar / dot-strip heatmap (auto by span) =====
+  const cal = data.calendar;
+  if (cal.length) {
+    const calContainer = document.getElementById('cal');
+    const containerW = calContainer.clientWidth || 880;
+    const svgNS = 'http://www.w3.org/2000/svg';
+
+    if (cal.length <= 60) {
+      // Dot strip: 1 row, all days inline
+      const n = cal.length;
+      const gap = 4;
+      const cellSize = Math.min(28, Math.max(10, Math.floor((containerW - (n-1)*gap) / n)));
+      const w = n * cellSize + (n-1) * gap;
+      const h = cellSize + 28; // room for date labels at bottom
+      const svg = document.createElementNS(svgNS, 'svg');
+      svg.setAttribute('width', '100%'); svg.setAttribute('height', h);
+      svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      svg.style.maxWidth = w + 'px'; svg.style.display = 'block'; svg.style.margin = '0 auto';
+
+      cal.forEach((d, i) => {
+        const x = i * (cellSize + gap);
+        const rect = document.createElementNS(svgNS, 'rect');
+        rect.setAttribute('x', x); rect.setAttribute('y', 0);
+        rect.setAttribute('width', cellSize); rect.setAttribute('height', cellSize);
+        rect.setAttribute('rx', cellSize > 16 ? 6 : 3);
+        let fill = 'rgba(0,0,0,0.05)';
+        if (d.intensity > 0) {
+          const a = 0.20 + d.intensity * 0.75;
+          fill = `rgba(200,85,61,${a.toFixed(3)})`;
+        }
+        rect.setAttribute('fill', fill);
+        const ttl = document.createElementNS(svgNS, 'title');
+        ttl.textContent = `${d.date} · ${d.volume.toLocaleString()} kg·次`;
+        rect.appendChild(ttl);
+        svg.appendChild(rect);
+
+        // Label every 5th day at the bottom
+        if (i === 0 || i === n-1 || i % Math.max(1, Math.floor(n/8)) === 0) {
+          const t = document.createElementNS(svgNS, 'text');
+          t.setAttribute('x', x + cellSize/2);
+          t.setAttribute('y', cellSize + 16);
+          t.setAttribute('font-size', '10');
+          t.setAttribute('fill', 'rgba(0,0,0,0.4)');
+          t.setAttribute('text-anchor', 'middle');
+          t.textContent = d.date.slice(5); // MM-DD
+          svg.appendChild(t);
+        }
+      });
+      calContainer.appendChild(svg);
+    } else {
+      // GitHub-style calendar heatmap
+      const startD = new Date(cal[0].date);
+      const startWeekOffset = ((startD.getDay() + 6) % 7);
+      const totalCells = startWeekOffset + cal.length;
+      const cols = Math.ceil(totalCells / 7);
+      const gap = 3;
+      const leftLabel = 28;
+      let cellSize = Math.floor((containerW - leftLabel - cols * gap) / cols);
+      cellSize = Math.max(8, Math.min(cellSize, 20));
+      const w = leftLabel + cols * (cellSize + gap);
+      const h = 7 * (cellSize + gap) + 4;
+      const svg = document.createElementNS(svgNS, 'svg');
+      svg.setAttribute('width', '100%'); svg.setAttribute('height', h);
+      svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      svg.style.maxWidth = w + 'px'; svg.style.display = 'block'; svg.style.margin = '0 auto';
+
+      const days = ['一','三','五'];
+      [0,2,4].forEach((d, idx) => {
+        const t = document.createElementNS(svgNS, 'text');
+        t.setAttribute('x', 0); t.setAttribute('y', d * (cellSize+gap) + cellSize - 2);
+        t.setAttribute('font-size', Math.min(11, cellSize-1));
+        t.setAttribute('fill', 'rgba(0,0,0,0.4)');
+        t.textContent = days[idx]; svg.appendChild(t);
+      });
+      cal.forEach((d, i) => {
+        const pos = startWeekOffset + i;
+        const col = Math.floor(pos / 7);
+        const row = ((new Date(d.date)).getDay() + 6) % 7;
+        const x = leftLabel + col * (cellSize + gap);
+        const y = row * (cellSize + gap);
+        const rect = document.createElementNS(svgNS, 'rect');
+        rect.setAttribute('x', x); rect.setAttribute('y', y);
+        rect.setAttribute('width', cellSize); rect.setAttribute('height', cellSize);
+        rect.setAttribute('rx', 2);
+        let fill = 'rgba(0,0,0,0.05)';
+        if (d.intensity > 0) {
+          const a = 0.20 + d.intensity * 0.75;
+          fill = `rgba(200,85,61,${a.toFixed(3)})`;
+        }
+        rect.setAttribute('fill', fill);
+        const ttl = document.createElementNS(svgNS, 'title');
+        ttl.textContent = `${d.date} · ${d.volume.toLocaleString()} kg·次`;
+        rect.appendChild(ttl); svg.appendChild(rect);
+      });
+      calContainer.appendChild(svg);
+    }
+  }
+
+  // ===== Weekday distribution =====
+  const wMax = Math.max(...data.weekday_counts) || 1;
+  const wkEl = document.getElementById('week');
+  data.weekday_counts.forEach((v, i) => {
+    const col = document.createElement('div');
+    col.className = 'col';
+    const pct = (v / wMax * 100).toFixed(1);
+    col.innerHTML = `<div class="wb"><div class="wb-fill" style="height:${pct}%"></div></div>
+                     <div class="wl">${data.weekday_labels[i]}</div>
+                     <div class="wv">${v}</div>`;
+    wkEl.appendChild(col);
+  });
+
+  // ===== Top exercises =====
+  const max = data.top_exercises[0]?.count || 1;
+  const barsEl = document.getElementById('bars');
+  data.top_exercises.forEach(e => {
+    const pct = (e.count / max * 100).toFixed(1);
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML = `<div class="bar-name" title="${e.name}">${e.name}</div>
+                     <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+                     <div class="bar-val">${e.count}</div>`;
+    barsEl.appendChild(row);
+  });
+
+  // ===== PRs =====
+  const prsEl = document.getElementById('prs');
+  s.prs.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'pr';
+    div.innerHTML = `<div class="pr-kw">${p.kw}</div>
+                     <div class="pr-val">${p.weight_kg}kg × ${p.reps}次</div>
+                     <div class="pr-ex">${p.exercise} · ${p.date}</div>`;
+    prsEl.appendChild(div);
+  });
+  if (!s.prs.length) prsEl.innerHTML = '<div style="color:var(--ink-3);font-size:13px">未识别到主项 PR 记录</div>';
+
+  // ===== Insights =====
+  const insEl = document.getElementById('insights');
+  (data.insights || []).forEach(t => {
+    const li = document.createElement('li');
+    li.textContent = t;
+    insEl.appendChild(li);
+  });
+
+  // Mark page-ready for headless snapshot
+  document.body.dataset.ready = '1';
+})();
+</script>
+</body>
+</html>

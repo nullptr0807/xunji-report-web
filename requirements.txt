@@ -1,0 +1,11 @@
+cryptography==48.0.0
+fastapi==0.136.1
+Jinja2==3.1.6
+matplotlib==3.10.9
+numpy==2.4.4
+pandas==3.0.3
+playwright==1.59.0
+python-dotenv==1.2.2
+python-multipart==0.0.28
+requests==2.34.0
+uvicorn==0.46.0
