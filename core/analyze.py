@@ -201,20 +201,34 @@ def analyze(parsed_dir: Path, out_dir: Path) -> dict:
         insights.append(f"已记录 {len(prs)} 个主项 PR，最近一个 PR 是 {max(prs, key=lambda x: x['date'])['exercise']}。")
 
     # ===== Training-type detection =====
-    # strength_ratio = sets with weight_kg > 0 / total sets
+    # set-based ratio (sets with weight / total sets) — biased toward strength
+    # because cardio sessions have 0 sets
     n_sets_total = len(sdf)
     n_sets_weighted = int((sdf['weight_kg'].fillna(0) > 0).sum())
     strength_ratio = (n_sets_weighted / n_sets_total) if n_sets_total else 0.0
 
-    # Cardio aggregates: scan all exercises across records for distance / duration / bpm / kcal
-    cardio_exercises = []  # list of {name, date, distance_km, duration_s, avg_bpm, kcal}
+    # time-based detection — much more honest. For each session, classify
+    # by whether it's primarily weighted sets or cardio activity.
+    strength_minutes = 0.0
+    cardio_minutes = 0.0
+    cardio_exercises = []  # {name, date, distance_km, duration_s, avg_bpm, kcal}
     for r in recs:
         if not r.get('exercises'):
             continue
         rdate = (r.get('start_iso') or '')[:10]
+        dur_min = (r.get('duration_ms') or 0) / 60000.0
+        has_weighted = any(
+            (s.get('weight_kg') or 0) > 0
+            for e in r['exercises'] for s in e.get('sets', [])
+        )
+        has_cardio_ex = False
         for e in r['exercises']:
-            has_cardio = any(k in e for k in ('distance_km', 'duration_s', 'avg_bpm', 'kcal'))
-            if has_cardio and not e.get('sets'):
+            is_cardio = (
+                any(k in e for k in ('distance_km', 'duration_s', 'avg_bpm', 'kcal'))
+                and not e.get('sets')
+            )
+            if is_cardio:
+                has_cardio_ex = True
                 cardio_exercises.append({
                     'name': e['name'],
                     'date': rdate,
@@ -223,15 +237,32 @@ def analyze(parsed_dir: Path, out_dir: Path) -> dict:
                     'avg_bpm': e.get('avg_bpm'),
                     'kcal': e.get('kcal'),
                 })
+        # Attribute session duration
+        if has_cardio_ex and not has_weighted:
+            cardio_minutes += dur_min
+        elif has_weighted and not has_cardio_ex:
+            strength_minutes += dur_min
+        else:
+            # Mixed session — split evenly. (Could refine via per-exercise
+            # duration_s when present, but rare and not worth complexity yet.)
+            cardio_minutes += dur_min / 2
+            strength_minutes += dur_min / 2
+
+    total_train_min = strength_minutes + cardio_minutes
+    strength_time_ratio = (strength_minutes / total_train_min) if total_train_min else 1.0
+
     total_distance_km = round(sum(c.get('distance_km') or 0 for c in cardio_exercises), 2)
-    total_cardio_minutes = round(sum((c.get('duration_s') or 0) for c in cardio_exercises) / 60, 1)
+    total_cardio_minutes = round(cardio_minutes, 1)
     n_cardio_sessions = len({c['date'] for c in cardio_exercises if c.get('date')})
 
-    summary['strength_ratio'] = round(strength_ratio, 3)
+    summary['strength_ratio'] = round(strength_ratio, 3)       # set-based (legacy)
+    summary['strength_time_ratio'] = round(strength_time_ratio, 3)  # time-based (primary)
     summary['n_sets_weighted'] = n_sets_weighted
     summary['n_sets_total'] = n_sets_total
+    summary['strength_minutes'] = round(strength_minutes, 1)
+    summary['cardio_minutes'] = total_cardio_minutes
     summary['total_distance_km'] = total_distance_km
-    summary['total_cardio_minutes'] = total_cardio_minutes
+    summary['total_cardio_minutes'] = total_cardio_minutes  # back-compat alias
     summary['n_cardio_sessions'] = n_cardio_sessions
 
     report_data = {

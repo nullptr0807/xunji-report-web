@@ -113,11 +113,15 @@ def run_pipeline(api_key: str, start: str, end: str, gap: float = 1.3,
     # Optional LLM commentary (best-effort, never fails the pipeline)
     storage.update_job(job_id, status="commenting")
     report_data = json.loads((job_dir / "report_data.json").read_text())
-    strength_ratio = (report_data.get("summary") or {}).get("strength_ratio", 1.0)
-    # Threshold: if <50% of recorded sets carry a weight value, the user is
-    # primarily cardio / functional / mixed — bypass the strength template
-    # and hand the data to the dynamic LLM analyzer instead.
-    use_dynamic = strength_ratio < 0.5
+    summary_ = report_data.get("summary") or {}
+    # Use time-based ratio (set-based wildly biases toward strength because
+    # a 60-min run contributes 0 sets while 4 sets of bench press = 4 sets).
+    strength_time_ratio = summary_.get("strength_time_ratio")
+    if strength_time_ratio is None:
+        strength_time_ratio = summary_.get("strength_ratio", 1.0)
+    # Threshold: if <60% of training TIME is on weighted strength work,
+    # the strength template will be a poor fit — hand off to dynamic LLM.
+    use_dynamic = strength_time_ratio < 0.60
 
     if use_dynamic:
         try:
