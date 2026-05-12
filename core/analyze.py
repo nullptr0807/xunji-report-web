@@ -200,6 +200,40 @@ def analyze(parsed_dir: Path, out_dir: Path) -> dict:
     if len(prs) >= 3:
         insights.append(f"已记录 {len(prs)} 个主项 PR，最近一个 PR 是 {max(prs, key=lambda x: x['date'])['exercise']}。")
 
+    # ===== Training-type detection =====
+    # strength_ratio = sets with weight_kg > 0 / total sets
+    n_sets_total = len(sdf)
+    n_sets_weighted = int((sdf['weight_kg'].fillna(0) > 0).sum())
+    strength_ratio = (n_sets_weighted / n_sets_total) if n_sets_total else 0.0
+
+    # Cardio aggregates: scan all exercises across records for distance / duration / bpm / kcal
+    cardio_exercises = []  # list of {name, date, distance_km, duration_s, avg_bpm, kcal}
+    for r in recs:
+        if not r.get('exercises'):
+            continue
+        rdate = (r.get('start_iso') or '')[:10]
+        for e in r['exercises']:
+            has_cardio = any(k in e for k in ('distance_km', 'duration_s', 'avg_bpm', 'kcal'))
+            if has_cardio and not e.get('sets'):
+                cardio_exercises.append({
+                    'name': e['name'],
+                    'date': rdate,
+                    'distance_km': e.get('distance_km'),
+                    'duration_s': e.get('duration_s'),
+                    'avg_bpm': e.get('avg_bpm'),
+                    'kcal': e.get('kcal'),
+                })
+    total_distance_km = round(sum(c.get('distance_km') or 0 for c in cardio_exercises), 2)
+    total_cardio_minutes = round(sum((c.get('duration_s') or 0) for c in cardio_exercises) / 60, 1)
+    n_cardio_sessions = len({c['date'] for c in cardio_exercises if c.get('date')})
+
+    summary['strength_ratio'] = round(strength_ratio, 3)
+    summary['n_sets_weighted'] = n_sets_weighted
+    summary['n_sets_total'] = n_sets_total
+    summary['total_distance_km'] = total_distance_km
+    summary['total_cardio_minutes'] = total_cardio_minutes
+    summary['n_cardio_sessions'] = n_cardio_sessions
+
     report_data = {
         "summary": summary,
         "weekday_counts": weekday_counts,
@@ -212,6 +246,7 @@ def analyze(parsed_dir: Path, out_dir: Path) -> dict:
         "pr_progression": pr_progression,
         "calendar": calendar,
         "insights": insights,
+        "cardio_exercises": cardio_exercises,
         "generated_at": datetime.utcnow().isoformat() + "Z",
     }
 

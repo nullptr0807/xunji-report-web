@@ -112,19 +112,52 @@ def run_pipeline(api_key: str, start: str, end: str, gap: float = 1.3,
 
     # Optional LLM commentary (best-effort, never fails the pipeline)
     storage.update_job(job_id, status="commenting")
-    try:
-        from app.commentary import generate_commentary
-        report_data = json.loads((job_dir / "report_data.json").read_text())
-        c = generate_commentary(report_data, job_dir / "llm_commentary.json", timeout=120)
-        if not c:
-            (job_dir / "commentary_skipped.log").write_text("LLM returned no parseable JSON")
-    except Exception as e:
-        import traceback
-        (job_dir / "commentary_skipped.log").write_text(
-            f"commentary failed: {e}\n\n{traceback.format_exc()}"
-        )
+    report_data = json.loads((job_dir / "report_data.json").read_text())
+    strength_ratio = (report_data.get("summary") or {}).get("strength_ratio", 1.0)
+    # Threshold: if <50% of recorded sets carry a weight value, the user is
+    # primarily cardio / functional / mixed — bypass the strength template
+    # and hand the data to the dynamic LLM analyzer instead.
+    use_dynamic = strength_ratio < 0.5
 
-    _render_html(job_dir, summary)
+    if use_dynamic:
+        try:
+            from app.commentary_dynamic import generate_dynamic_commentary
+            # Load parsed records (raw-ish data the LLM gets to see)
+            records = []
+            for p in sorted(parsed_dir.glob("*.json")):
+                try:
+                    records.extend(json.loads(p.read_text()))
+                except Exception:
+                    pass
+            c = generate_dynamic_commentary(
+                report_data, records, job_dir / "dynamic_sections.json", timeout=180,
+            )
+            if not c:
+                # Dynamic failed — fall back to strength template anyway
+                use_dynamic = False
+                (job_dir / "dynamic_skipped.log").write_text(
+                    "LLM returned no parseable JSON, falling back to strength template"
+                )
+        except Exception as e:
+            import traceback
+            use_dynamic = False
+            (job_dir / "dynamic_skipped.log").write_text(
+                f"dynamic commentary failed: {e}\n\n{traceback.format_exc()}"
+            )
+
+    if not use_dynamic:
+        try:
+            from app.commentary import generate_commentary
+            c = generate_commentary(report_data, job_dir / "llm_commentary.json", timeout=120)
+            if not c:
+                (job_dir / "commentary_skipped.log").write_text("LLM returned no parseable JSON")
+        except Exception as e:
+            import traceback
+            (job_dir / "commentary_skipped.log").write_text(
+                f"commentary failed: {e}\n\n{traceback.format_exc()}"
+            )
+
+    _render_html(job_dir, summary, use_dynamic=use_dynamic)
 
     storage.update_job(job_id, status="done", finished_at=datetime.utcnow().isoformat())
     return {
@@ -138,9 +171,10 @@ def run_pipeline(api_key: str, start: str, end: str, gap: float = 1.3,
     }
 
 
-def _render_html(job_dir: Path, summary: dict):
-    """Copy the report template into job dir. JS will fetch report_data.json."""
-    template = Path(__file__).resolve().parent.parent / "web" / "report_template.html"
+def _render_html(job_dir: Path, summary: dict, use_dynamic: bool = False):
+    """Copy the appropriate report template into job dir."""
+    tmpl_name = "report_template_dynamic.html" if use_dynamic else "report_template.html"
+    template = Path(__file__).resolve().parent.parent / "web" / tmpl_name
     (job_dir / "report.html").write_text(template.read_text())
 
 

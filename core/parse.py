@@ -26,6 +26,10 @@ _SET = re.compile(r"^\d+组$")            # "1组"
 _KG = re.compile(r"^([\d.]+)kg$")
 _REPS = re.compile(r"^(\d+)次$")
 _TIME = re.compile(r"^time:(\d+)s$")
+_KM = re.compile(r"^([\d.]+)km$")
+_METER = re.compile(r"^([\d.]+)m$")
+_BPM = re.compile(r"^([\d.]+)bpm$")
+_KCAL = re.compile(r"^([\d.]+)kcal$")
 
 
 def parse_record(text: str) -> dict[str, Any]:
@@ -79,6 +83,19 @@ def parse_record(text: str) -> dict[str, Any]:
             continue
 
         if current_set is None:
+            # Cardio-style tokens attached directly to the exercise (no "N组")
+            # e.g. "2.跑步, 5km, 300kcal, time:1800s, 140bpm"
+            if current_ex is not None:
+                if m := _KM.match(tok):
+                    current_ex["distance_km"] = float(m.group(1))
+                elif m := _METER.match(tok):
+                    current_ex["distance_km"] = float(m.group(1)) / 1000.0
+                elif m := _TIME.match(tok):
+                    current_ex["duration_s"] = int(m.group(1))
+                elif m := _BPM.match(tok):
+                    current_ex["avg_bpm"] = int(float(m.group(1)))
+                elif m := _KCAL.match(tok):
+                    current_ex["kcal"] = int(float(m.group(1)))
             continue
 
         if m := _KG.match(tok):
@@ -87,6 +104,14 @@ def parse_record(text: str) -> dict[str, Any]:
             current_set["reps"] = int(m.group(1))
         elif m := _TIME.match(tok):
             current_set["rest_s"] = int(m.group(1))
+        elif m := _KM.match(tok):
+            current_set["distance_km"] = float(m.group(1))
+        elif m := _METER.match(tok):
+            current_set["distance_km"] = float(m.group(1)) / 1000.0
+        elif m := _BPM.match(tok):
+            current_set["avg_bpm"] = int(float(m.group(1)))
+        elif m := _KCAL.match(tok):
+            current_set["kcal"] = int(float(m.group(1)))
 
     if exercises:
         rec["exercises"] = exercises
