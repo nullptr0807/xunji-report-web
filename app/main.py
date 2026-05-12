@@ -55,7 +55,7 @@ def generate(req: GenerateReq):
         raise HTTPException(
             429,
             f"超过每日配额：同一 API Key 24 小时内最多 {limit} 次报告生成，"
-            f"今日已使用 {used} 次。请明天再来，或在训记客户端换一个 Key。",
+            f"今日已使用 {used} 次。请明天再来。",
         )
 
     # Pre-create job so we can return job_id instantly, run pipeline in thread
