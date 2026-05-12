@@ -434,6 +434,7 @@ async function poll(job_id) {
       fill.className = 'pg-bar-fill done';
       fill.style.width = '100%';
       statusEl.textContent = '报告已生成 ✓';
+      detailEl.innerHTML = '';
       document.getElementById('btn-view').href = 'report/' + job_id + '/';
       document.getElementById('btn-dl').href = 'report/' + job_id + '/snapshot.jpg';
       actionsEl.style.display = 'flex';

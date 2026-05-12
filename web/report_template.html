@@ -122,6 +122,11 @@
   }
   .hook .h-head { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.3; }
   .hook .h-sub { font-size: 15px; margin-top: 10px; opacity: 0.92; line-height: 1.5; }
+  .hook .h-overall {
+    font-size: 14.5px; margin-top: 18px; padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.18);
+    line-height: 1.85; opacity: 0.95; text-align: justify;
+  }
 
   /* Per-chart sharp take */
   .take {
@@ -289,6 +294,7 @@
     <span class="h-tag">AI 教练点评</span>
     <div class="h-head" id="hook-head"></div>
     <div class="h-sub" id="hook-sub"></div>
+    <div class="h-overall" id="hook-overall" style="display:none"></div>
   </div>
 
   <div class="glass chart-card">
@@ -388,6 +394,12 @@
       document.getElementById('hook').style.display = 'block';
       document.getElementById('hook-head').textContent = commentary.hero_hook.headline || '';
       document.getElementById('hook-sub').textContent = commentary.hero_hook.subline || '';
+    }
+    if (commentary.overall_take) {
+      document.getElementById('hook').style.display = 'block';
+      const oel = document.getElementById('hook-overall');
+      oel.textContent = commentary.overall_take;
+      oel.style.display = 'block';
     }
     const takes = commentary.chart_takes || {};
     for (const [k, txt] of Object.entries(takes)) {
