@@ -81,9 +81,8 @@
   }
   .hero .big-sub { color: var(--ink-2); font-size: 14px; margin-top: 4px; }
 
-  /* Stats grid: 5 boxes */
   .stats {
-    display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-top: 28px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 28px;
   }
   .stat {
     background: rgba(255,255,255,0.5);
@@ -260,7 +259,6 @@
       <div class="stat"><div class="l">训练日数</div><div class="v" id="s-days">—</div><div class="s" id="s-freq">—</div></div>
       <div class="stat"><div class="l">训练时长</div><div class="v" id="s-hours">—</div><div class="s">小时</div></div>
       <div class="stat"><div class="l">总组数</div><div class="v" id="s-sets">—</div><div class="s" id="s-reps">—</div></div>
-      <div class="stat"><div class="l">总容量</div><div class="v" id="s-volume">—</div><div class="s">kg·次</div></div>
       <div class="stat"><div class="l">最长连续</div><div class="v" id="s-streak">—</div><div class="s">天</div></div>
     </div>
 
@@ -356,7 +354,6 @@
   document.getElementById('s-hours').textContent = s.total_hours;
   document.getElementById('s-sets').textContent = s.total_sets.toLocaleString();
   document.getElementById('s-reps').textContent = s.total_reps.toLocaleString() + ' 次';
-  document.getElementById('s-volume').textContent = Math.round(s.total_volume_kg).toLocaleString();
   document.getElementById('s-streak').textContent = s.longest_streak || 1;
   document.getElementById('gen-at').textContent = data.generated_at.slice(0, 16).replace('T',' ') + ' UTC';
 

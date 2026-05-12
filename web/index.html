@@ -225,7 +225,9 @@
     <button type="submit" class="primary" id="btn">生成报告</button>
 
     <div class="notice">
-      <p><strong>数据保留 7 天</strong>：为了让你短期内重复生成报告时不必重复下载训练数据，
+      <p><strong>每日 3 次配额</strong>：同一 API Key 24 小时内最多生成 3 份报告（含 AI 教练点评），
+      避免无限制调用 LLM 烧穿成本。</p>
+      <p style="margin-top:8px"><strong>数据保留 7 天</strong>：为了让你短期内重复生成报告时不必重复下载训练数据，
       已下载的数据会在服务器上缓存 <strong>7 天</strong>，到期自动清除。</p>
       <p style="margin-top:8px">本服务仅将你的数据用于<strong>本次报告分析与展示</strong>，
       不做任何形式的转售、模型训练、画像或商业化使用。</p>
@@ -306,10 +308,25 @@ f.onsubmit = async (e) => {
     failed('网络错误: ' + err); return;
   }
   if (!res.ok) {
-    const t = await res.text();
-    failed(res.status + ': ' + t); return;
+    let t;
+    try {
+      const j = await res.json();
+      t = j.detail || JSON.stringify(j);
+    } catch {
+      t = await res.text();
+    }
+    if (res.status === 429) {
+      failed(t);
+    } else {
+      failed(res.status + ': ' + t);
+    }
+    return;
   }
-  const {job_id} = await res.json();
+  const resp = await res.json();
+  const {job_id, quota_used, quota_limit} = resp;
+  if (quota_used && quota_limit) {
+    detailEl.innerHTML = '<span>今日配额 <strong>' + quota_used + '/' + quota_limit + '</strong></span>';
+  }
   poll(job_id);
 };
 

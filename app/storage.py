@@ -167,3 +167,29 @@ def get_job(job_id: str) -> dict | None:
     row = cur.fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+# ===== Rate limiting =====
+DAILY_LIMIT_PER_KEY = 3
+
+
+def count_jobs_today(key_hash_value: str) -> int:
+    """Count jobs created in the last 24h for this key."""
+    from datetime import timedelta
+    init_db()
+    cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.execute(
+        "SELECT COUNT(*) FROM jobs WHERE key_hash=? AND created_at>=?",
+        (key_hash_value, cutoff),
+    )
+    n = cur.fetchone()[0]
+    conn.close()
+    return n
+
+
+def check_quota(api_key: str) -> tuple[bool, int, int]:
+    """Return (allowed, used_today, limit)."""
+    kh = key_hash(api_key)
+    used = count_jobs_today(kh)
+    return used < DAILY_LIMIT_PER_KEY, used, DAILY_LIMIT_PER_KEY

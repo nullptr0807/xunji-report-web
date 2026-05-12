@@ -49,10 +49,19 @@ def generate(req: GenerateReq):
     if (d_end - d_start).days > 365 * 6:
         raise HTTPException(400, "range too large (>6 years)")
 
+    # Per-key daily quota (3 reports / 24h)
+    allowed, used, limit = storage.check_quota(req.api_key)
+    if not allowed:
+        raise HTTPException(
+            429,
+            f"超过每日配额：同一 API Key 24 小时内最多 {limit} 次报告生成，"
+            f"今日已使用 {used} 次。请明天再来，或在训记客户端换一个 Key。",
+        )
+
     # Pre-create job so we can return job_id instantly, run pipeline in thread
     job_id, _ = storage.create_job(req.api_key, req.start, req.end)
     _executor.submit(_safe_run, req.api_key, req.start, req.end, job_id)
-    return {"job_id": job_id}
+    return {"job_id": job_id, "quota_used": used + 1, "quota_limit": limit}
 
 
 def _safe_run(api_key: str, start: str, end: str, job_id: str):
