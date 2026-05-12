@@ -63,13 +63,22 @@ def init_db():
         date_start TEXT,
         date_end TEXT,
         status TEXT NOT NULL,
+        error TEXT,
         created_at TEXT NOT NULL,
         finished_at TEXT,
-        error TEXT,
+        quota_refunded INTEGER DEFAULT 0,
+        cancel_requested INTEGER DEFAULT 0,
         FOREIGN KEY(key_hash) REFERENCES users(key_hash)
     );
     """)
     conn.commit()
+    # Migration: add column if missing on old DBs
+    for col in ("quota_refunded INTEGER DEFAULT 0", "cancel_requested INTEGER DEFAULT 0"):
+        try:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {col}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
     conn.close()
     try:
         os.chmod(DB_PATH, 0o600)
@@ -187,7 +196,7 @@ def count_jobs_today(key_hash_value: str) -> int:
     cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.execute(
-        "SELECT COUNT(*) FROM jobs WHERE key_hash=? AND created_at>=?",
+        "SELECT COUNT(*) FROM jobs WHERE key_hash=? AND created_at>=? AND COALESCE(quota_refunded,0)=0",
         (key_hash_value, cutoff),
     )
     n = cur.fetchone()[0]

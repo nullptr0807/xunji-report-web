@@ -229,6 +229,23 @@
   }
   .disclaimer strong { color: var(--ink-2); font-weight: 600; }
 
+  .cta-mine {
+    display: flex; align-items: center; justify-content: space-between; gap: 20px;
+    margin-top: 32px; padding: 24px 28px; flex-wrap: wrap;
+  }
+  .cta-headline { font-size: 18px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+  .cta-sub { font-size: 13px; color: var(--ink-3); }
+  .cta-btn {
+    background: var(--ink); color: #fff; padding: 12px 22px; border-radius: 10px;
+    text-decoration: none; font-weight: 500; white-space: nowrap; font-size: 14px;
+    transition: background 0.15s;
+  }
+  .cta-btn:hover { background: #000; }
+  @media (max-width: 720px) {
+    .cta-mine { flex-direction: column; align-items: stretch; text-align: center; padding: 20px; }
+    .cta-btn { text-align: center; }
+  }
+
   @media (max-width: 720px) {
     body { padding: 16px 12px 40px; }
     .glass { padding: 20px 16px; border-radius: 14px; }
@@ -323,6 +340,14 @@
     <div id="insights-fallback" style="display:none">
       <ul class="insights" id="insights"></ul>
     </div>
+  </div>
+
+  <div class="cta-mine glass">
+    <div class="cta-text">
+      <div class="cta-headline">想看看你自己的训练数据被这样剖析？</div>
+      <div class="cta-sub">粘贴你的训记 API Key，几十秒就能生成一份属于你的报告。</div>
+    </div>
+    <a href="../../" class="cta-btn">我也要测 →</a>
   </div>
 
   <footer>

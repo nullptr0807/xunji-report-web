@@ -175,6 +175,25 @@
   .pg-actions .btn-view:hover { background: #000; }
   .pg-actions .btn-dl { background: rgba(255,255,255,0.7); color: var(--ink); border: 1px solid rgba(0,0,0,0.08); }
   .pg-actions .btn-dl:hover { background: #fff; }
+  .pg-cancel-wrap { margin-top: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .btn-cancel {
+    background: transparent; color: #b94a4a; border: 1px solid rgba(185,74,74,0.4);
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+    font-family: inherit;
+  }
+  .btn-cancel:hover { background: rgba(185,74,74,0.08); border-color: #b94a4a; }
+  .btn-cancel:disabled { opacity: 0.5; cursor: default; }
+  .cancel-hint { font-size: 12px; color: var(--ink-3); }
+  .howto {
+    margin-top: 8px; margin-bottom: 4px;
+    background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .howto summary { cursor: pointer; color: var(--accent); font-weight: 500; outline: none; }
+  .howto summary:hover { color: var(--ink); }
+  .howto ol { margin: 10px 0 6px; padding-left: 22px; color: var(--ink-2); line-height: 1.7; }
+  .howto code { background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .howto-note { margin: 6px 0 0; color: var(--ink-3); font-size: 12px; line-height: 1.6; }
 
   footer {
     text-align: center; margin-top: 30px; color: var(--ink-3); font-size: 12px;
@@ -210,6 +229,16 @@
   <form id="f" class="glass">
     <label for="api_key">训记 API Key</label>
     <input type="password" id="api_key" placeholder="xjllm_..." required autocomplete="off" inputmode="text"/>
+    <details class="howto">
+      <summary>如何获取 API Key？</summary>
+      <ol>
+        <li>打开<strong>训记</strong> App</li>
+        <li>进入「<strong>我</strong>」标签</li>
+        <li>点击「<strong>数据导出</strong>」</li>
+        <li>点击「<strong>申请 Key</strong>」，复制以 <code>xjllm_</code> 开头的字符串</li>
+      </ol>
+      <p class="howto-note">Key 等于你的训记账号访问凭证，请只粘贴到信任的网站。本服务的 Key 加密落盘，7 天后自动清除；不想再用可在训记客户端吊销。</p>
+    </details>
 
     <div class="row">
       <div>
@@ -247,6 +276,10 @@
       <a class="btn-view" id="btn-view" href="#" target="_blank">查看报告</a>
       <a class="btn-dl" id="btn-dl" href="#" target="_blank">下载长图</a>
     </div>
+    <div class="pg-cancel-wrap" id="pg-cancel-wrap" style="display:none">
+      <button type="button" class="btn-cancel" id="btn-cancel">取消本次生成</button>
+      <span class="cancel-hint">取消不计入每日 3 次配额</span>
+    </div>
   </div>
 
   <footer>
@@ -272,6 +305,10 @@ const fill = document.getElementById('pg-fill');
 const statusEl = document.getElementById('pg-status');
 const detailEl = document.getElementById('pg-detail');
 const actionsEl = document.getElementById('pg-actions');
+const cancelWrap = document.getElementById('pg-cancel-wrap');
+const cancelBtn = document.getElementById('btn-cancel');
+let currentJobId = null;
+let cancelled = false;
 const elapsedEl = document.getElementById('pg-elapsed');
 
 // Default: last 30 days
@@ -294,6 +331,9 @@ f.onsubmit = async (e) => {
   statusEl.textContent = '提交任务中…';
   detailEl.innerHTML = '';
   actionsEl.style.display = 'none';
+  cancelWrap.style.display = 'none';
+  cancelled = false;
+  currentJobId = null;
 
   const body = {
     api_key: document.getElementById('api_key').value.trim(),
@@ -329,7 +369,24 @@ f.onsubmit = async (e) => {
   } else if (quota_used && quota_limit) {
     detailEl.innerHTML = '<span>今日配额 <strong>' + quota_used + '/' + quota_limit + '</strong></span>';
   }
+  currentJobId = job_id;
+  cancelBtn.disabled = false;
+  cancelBtn.textContent = '取消本次生成';
+  cancelWrap.style.display = 'flex';
   poll(job_id);
+};
+
+cancelBtn.onclick = async () => {
+  if (!currentJobId) return;
+  cancelBtn.disabled = true;
+  cancelBtn.textContent = '取消中…';
+  try {
+    await fetch('api/job/' + currentJobId + '/cancel', {method: 'POST'});
+    cancelled = true;
+  } catch (err) {
+    cancelBtn.disabled = false;
+    cancelBtn.textContent = '取消失败，重试';
+  }
 };
 
 function failed(msg) {
@@ -373,6 +430,7 @@ async function poll(job_id) {
 
     if (j.status === 'done' && j.report_ready) {
       clearInterval(ticker);
+      cancelWrap.style.display = 'none';
       fill.className = 'pg-bar-fill done';
       fill.style.width = '100%';
       statusEl.textContent = '报告已生成 ✓';
@@ -382,8 +440,20 @@ async function poll(job_id) {
       btn.disabled = false; btn.textContent = '再来一次';
       return;
     }
+    if (j.status === 'cancelled' || (j.status || '').startsWith('cancelled')) {
+      clearInterval(ticker);
+      cancelWrap.style.display = 'none';
+      fill.className = 'pg-bar-fill';
+      fill.style.width = '100%';
+      fill.style.background = 'rgba(0,0,0,0.15)';
+      statusEl.textContent = '已取消';
+      detailEl.innerHTML = '<span>本次生成已取消，<strong>不计入今日 3 次配额</strong>。</span>';
+      btn.disabled = false; btn.textContent = '重新生成';
+      return;
+    }
     if (j.status === 'failed') {
       clearInterval(ticker);
+      cancelWrap.style.display = 'none';
       failed(j.error || '未知错误');
       return;
     }

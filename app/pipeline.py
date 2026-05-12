@@ -11,6 +11,16 @@ from core.analyze import analyze
 from app import storage
 
 
+class JobCancelled(Exception):
+    """Raised when the user cancels a running job."""
+
+
+def _check_cancelled(job_id: str):
+    j = storage.get_job(job_id)
+    if j and j.get("cancel_requested"):
+        raise JobCancelled()
+
+
 def _daterange(start: date, end: date):
     d = start
     while d <= end:
@@ -54,6 +64,7 @@ def run_pipeline(api_key: str, start: str, end: str, gap: float = 1.3,
     errors = []
     total = len(days)
     for i, day in enumerate(days):
+        _check_cancelled(job_id)
         ds = day.isoformat()
         cache_path = cache_dir / f"{ds}.json"
         from_cache = False
@@ -90,6 +101,7 @@ def run_pipeline(api_key: str, start: str, end: str, gap: float = 1.3,
             status=f"fetching {i+1}/{total} cache:{n_cached} new:{n_fetched} todo={len(to_fetch)}",
         )
 
+    _check_cancelled(job_id)
     storage.update_job(job_id, status="analyzing")
     try:
         summary = analyze(parsed_dir, job_dir)

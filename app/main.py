@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
 
 from app import storage
-from app.pipeline import run_pipeline
+from app.pipeline import run_pipeline, JobCancelled
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB_DIR = ROOT / "web"
@@ -67,10 +67,35 @@ def generate(req: GenerateReq):
 def _safe_run(api_key: str, start: str, end: str, job_id: str):
     try:
         run_pipeline(api_key, start, end, job_id=job_id)
+    except JobCancelled:
+        # User-cancelled: mark as cancelled + refund quota
+        from datetime import datetime
+        storage.update_job(
+            job_id,
+            status="cancelled",
+            quota_refunded=1,
+            finished_at=datetime.utcnow().isoformat(),
+        )
     except Exception as e:
         import traceback
         storage.update_job(job_id, status="failed", error=str(e)[:500])
         traceback.print_exc()
+
+
+@app.post("/api/job/{job_id}/cancel")
+def cancel_job(job_id: str):
+    job = storage.get_job(job_id)
+    if not job:
+        raise HTTPException(404, "job not found")
+    status = job.get("status") or ""
+    if status == "done":
+        raise HTTPException(409, "report already finished — cannot cancel")
+    if status.startswith("cancelled") or job.get("cancel_requested"):
+        return {"ok": True, "already": True}
+    # Set flag; pipeline thread detects it at the next checkpoint and exits
+    # cleanly. _safe_run will mark status='cancelled' + quota_refunded=1.
+    storage.update_job(job_id, cancel_requested=1)
+    return {"ok": True, "quota_refunded": True}
 
 
 @app.get("/api/job/{job_id}")
