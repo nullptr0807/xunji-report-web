@@ -175,6 +175,58 @@
   .pg-actions .btn-view:hover { background: #000; }
   .pg-actions .btn-dl { background: rgba(255,255,255,0.7); color: var(--ink); border: 1px solid rgba(0,0,0,0.08); }
   .pg-actions .btn-dl:hover { background: #fff; }
+
+  /* Completion modal */
+  .modal-mask {
+    position: fixed; inset: 0; background: rgba(20,18,15,0.55);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    display: none; align-items: center; justify-content: center; z-index: 50;
+    padding: 16px;
+  }
+  .modal-mask.show { display: flex; animation: fadeIn 0.18s ease; }
+  @keyframes fadeIn { from {opacity: 0} to {opacity: 1} }
+  .modal {
+    background: rgba(255,255,255,0.92); border: 1px solid rgba(255,255,255,0.6);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-radius: 18px; max-width: 460px; width: 100%;
+    padding: 28px 26px 22px; box-shadow: 0 24px 80px rgba(0,0,0,0.25);
+    animation: pop 0.22s cubic-bezier(.16,.84,.44,1);
+  }
+  @keyframes pop { from {transform: scale(0.94); opacity: 0} to {transform: scale(1); opacity: 1} }
+  .modal h2 { margin: 0 0 18px; font-size: 20px; font-weight: 700; color: var(--ink); }
+  .modal-checks { list-style: none; padding: 0; margin: 0 0 22px; }
+  .modal-checks li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; font-size: 14.5px; color: var(--ink-2);
+  }
+  .modal-checks .ck {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #2ea44f; color: #fff; font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .modal-actions .full { grid-column: 1 / -1; }
+  .modal-actions a, .modal-actions button {
+    text-align: center; padding: 11px 14px; border-radius: 10px;
+    text-decoration: none; font-size: 14px; font-weight: 500; cursor: pointer;
+    font-family: inherit; border: 1px solid rgba(0,0,0,0.08);
+    background: rgba(255,255,255,0.7); color: var(--ink); transition: all 0.15s;
+  }
+  .modal-actions a:hover, .modal-actions button:hover { background: #fff; border-color: rgba(0,0,0,0.18); }
+  .modal-actions .primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .modal-actions .primary:hover { background: #000; border-color: #000; }
+  .modal-close {
+    background: none; border: none; cursor: pointer; color: var(--ink-3);
+    font-size: 13px; margin-top: 14px; width: 100%; padding: 6px;
+  }
+  .modal-close:hover { color: var(--ink); }
+  .share-toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+    background: rgba(20,18,15,0.92); color: #fff; padding: 10px 18px;
+    border-radius: 22px; font-size: 13px; z-index: 60;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .share-toast.show { opacity: 1; }
   .pg-cancel-wrap { margin-top: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .btn-cancel {
     background: transparent; color: #b94a4a; border: 1px solid rgba(185,74,74,0.4);
@@ -296,6 +348,24 @@
     </p>
   </footer>
 </div>
+
+<div class="modal-mask" id="modal-mask">
+  <div class="modal" role="dialog" aria-labelledby="modal-title">
+    <h2 id="modal-title">✨ 报告生成完成</h2>
+    <ul class="modal-checks">
+      <li><span class="ck">✓</span>训练数据下载完成</li>
+      <li><span class="ck">✓</span>数据分析与图表渲染完成</li>
+      <li><span class="ck">✓</span>AI 教练点评完成</li>
+    </ul>
+    <div class="modal-actions">
+      <a class="primary full" id="modal-view" href="#" target="_blank">查看报告</a>
+      <button type="button" id="modal-share">复制分享链接</button>
+      <a id="modal-dl" href="#" target="_blank">下载长图</a>
+    </div>
+    <button type="button" class="modal-close" id="modal-close">关闭</button>
+  </div>
+</div>
+<div class="share-toast" id="share-toast">链接已复制 ✓</div>
 
 <script>
 const f = document.getElementById('f');
@@ -439,6 +509,7 @@ async function poll(job_id) {
       document.getElementById('btn-dl').href = 'report/' + job_id + '/snapshot.jpg';
       actionsEl.style.display = 'flex';
       btn.disabled = false; btn.textContent = '再来一次';
+      showCompletionModal(job_id);
       return;
     }
     if (j.status === 'cancelled' || (j.status || '').startsWith('cancelled')) {
@@ -501,6 +572,32 @@ async function poll(job_id) {
     lastStatus = j.status;
   }
 }
+
+// ===== Completion modal =====
+function showCompletionModal(job_id) {
+  const mask = document.getElementById('modal-mask');
+  const reportUrl = new URL('report/' + job_id + '/', window.location.href).href;
+  document.getElementById('modal-view').href = reportUrl;
+  document.getElementById('modal-dl').href = 'report/' + job_id + '/snapshot.jpg';
+  document.getElementById('modal-share').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(reportUrl);
+    } catch {
+      // Fallback for non-HTTPS or old browsers
+      const ta = document.createElement('textarea');
+      ta.value = reportUrl; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch {}
+      document.body.removeChild(ta);
+    }
+    const t = document.getElementById('share-toast');
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1800);
+  };
+  document.getElementById('modal-close').onclick = () => mask.classList.remove('show');
+  mask.onclick = (e) => { if (e.target === mask) mask.classList.remove('show'); };
+  mask.classList.add('show');
+}
 </script>
+
 </body>
 </html>
