@@ -81,8 +81,9 @@
   }
   .hero .big-sub { color: var(--ink-2); font-size: 14px; margin-top: 4px; }
 
+  /* Stats grid: 5 boxes */
   .stats {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 28px;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-top: 28px;
   }
   .stat {
     background: rgba(255,255,255,0.5);
@@ -100,6 +101,56 @@
   }
   .chart-card .chart-title { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 4px; }
   .chart-card .chart-sub { color: var(--ink-2); font-size: 13px; margin-bottom: 18px; }
+
+  /* AI hero hook — between hero and charts */
+  .hook {
+    margin: 24px auto 20px;
+    padding: 28px 32px;
+    background: linear-gradient(135deg, rgba(200,85,61,0.92), rgba(168,71,47,0.92));
+    color: #fff;
+    border-radius: var(--radius);
+    box-shadow: 0 18px 48px rgba(200,85,61,0.32);
+    position: relative; overflow: hidden;
+  }
+  .hook::before {
+    content: '"'; position: absolute; top: -30px; left: 18px;
+    font-size: 160px; font-family: Georgia, serif; color: rgba(255,255,255,0.18); line-height: 1;
+  }
+  .hook .h-tag {
+    display: inline-block; padding: 4px 10px; font-size: 11px;
+    background: rgba(255,255,255,0.22); border-radius: 100px; letter-spacing: 0.08em;
+    margin-bottom: 14px;
+  }
+  .hook .h-head { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.3; }
+  .hook .h-sub { font-size: 15px; margin-top: 10px; opacity: 0.92; line-height: 1.5; }
+
+  /* Per-chart sharp take */
+  .take {
+    margin-bottom: 14px; padding: 10px 14px;
+    background: rgba(200,85,61,0.06);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    font-size: 14px; color: var(--ink); line-height: 1.55;
+  }
+
+  /* Improvement plan items */
+  .plan { list-style: none; counter-reset: pi; }
+  .plan li {
+    counter-increment: pi;
+    padding: 14px 0 14px 42px;
+    position: relative;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    font-size: 15px; line-height: 1.65;
+  }
+  .plan li:last-child { border-bottom: none; }
+  .plan li::before {
+    content: counter(pi);
+    position: absolute; left: 0; top: 14px;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+  }
 
   .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 14px; }
   .legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
@@ -189,6 +240,9 @@
     .bar-name { flex: 0 0 100px; font-size: 12px; }
     .week { gap: 4px; }
     .week .wb { height: 60px; }
+    .hook { padding: 22px 20px; }
+    .hook .h-head { font-size: 21px; }
+    .hook .h-sub { font-size: 14px; }
   }
 </style>
 </head>
@@ -206,6 +260,7 @@
       <div class="stat"><div class="l">训练日数</div><div class="v" id="s-days">—</div><div class="s" id="s-freq">—</div></div>
       <div class="stat"><div class="l">训练时长</div><div class="v" id="s-hours">—</div><div class="s">小时</div></div>
       <div class="stat"><div class="l">总组数</div><div class="v" id="s-sets">—</div><div class="s" id="s-reps">—</div></div>
+      <div class="stat"><div class="l">总容量</div><div class="v" id="s-volume">—</div><div class="s">kg·次</div></div>
       <div class="stat"><div class="l">最长连续</div><div class="v" id="s-streak">—</div><div class="s">天</div></div>
     </div>
 
@@ -215,15 +270,23 @@
     </div>
   </div>
 
+  <div class="hook" id="hook" style="display:none">
+    <span class="h-tag">AI 教练点评</span>
+    <div class="h-head" id="hook-head"></div>
+    <div class="h-sub" id="hook-sub"></div>
+  </div>
+
   <div class="glass chart-card">
     <div class="chart-title">训练容量趋势</div>
     <div class="chart-sub">每次训练的总容量（kg·次），蓝线为 7 次滑动均值</div>
+    <div class="take" id="take-volume" style="display:none"></div>
     <div class="chart-host" id="chart-volume"></div>
   </div>
 
   <div class="glass chart-card">
     <div class="chart-title">主项 e1RM 累积曲线</div>
     <div class="chart-sub">基于 Epley 公式估算的等效 1RM，按动作分别取每日最高再累积</div>
+    <div class="take" id="take-pr" style="display:none"></div>
     <div class="legend" id="pr-legend"></div>
     <div class="chart-host tall" id="chart-pr"></div>
   </div>
@@ -231,18 +294,21 @@
   <div class="glass chart-card">
     <div class="chart-title">每日训练强度</div>
     <div class="chart-sub">颜色越深表示当日训练容量越大，灰色为休息日</div>
+    <div class="take" id="take-calendar" style="display:none"></div>
     <div class="cal" id="cal"></div>
   </div>
 
   <div class="glass chart-card">
     <div class="chart-title">周内分布</div>
     <div class="chart-sub">你更习惯在一周的哪几天训练</div>
+    <div class="take" id="take-weekday" style="display:none"></div>
     <div class="week" id="week"></div>
   </div>
 
   <div class="glass chart-card">
     <div class="chart-title">最常做的动作 Top 20</div>
     <div class="chart-sub">按出现次数排序</div>
+    <div class="take" id="take-top_exercises" style="display:none"></div>
     <div class="bars" id="bars"></div>
   </div>
 
@@ -253,9 +319,12 @@
   </div>
 
   <div class="glass chart-card">
-    <div class="chart-title">数据点评</div>
-    <div class="chart-sub">基于规则的自动观察</div>
-    <ul class="insights" id="insights"></ul>
+    <div class="chart-title">下一步怎么练</div>
+    <div class="chart-sub">基于这份报告，AI 教练给你的可落地改进建议</div>
+    <ol class="plan" id="plan"></ol>
+    <div id="insights-fallback" style="display:none">
+      <ul class="insights" id="insights"></ul>
+    </div>
   </div>
 
   <footer>
@@ -271,7 +340,10 @@
 
 <script>
 (async function() {
-  const data = await fetch('report_data.json').then(r => r.json());
+  const [data, commentary] = await Promise.all([
+    fetch('report_data.json').then(r => r.json()),
+    fetch('llm_commentary.json').then(r => r.ok ? r.json() : null).catch(() => null),
+  ]);
   const s = data.summary;
 
   document.getElementById('title').textContent = '训练分析报告';
@@ -284,8 +356,44 @@
   document.getElementById('s-hours').textContent = s.total_hours;
   document.getElementById('s-sets').textContent = s.total_sets.toLocaleString();
   document.getElementById('s-reps').textContent = s.total_reps.toLocaleString() + ' 次';
+  document.getElementById('s-volume').textContent = Math.round(s.total_volume_kg).toLocaleString();
   document.getElementById('s-streak').textContent = s.longest_streak || 1;
   document.getElementById('gen-at').textContent = data.generated_at.slice(0, 16).replace('T',' ') + ' UTC';
+
+  // ===== LLM commentary =====
+  if (commentary) {
+    if (commentary.hero_hook) {
+      document.getElementById('hook').style.display = 'block';
+      document.getElementById('hook-head').textContent = commentary.hero_hook.headline || '';
+      document.getElementById('hook-sub').textContent = commentary.hero_hook.subline || '';
+    }
+    const takes = commentary.chart_takes || {};
+    for (const [k, txt] of Object.entries(takes)) {
+      const el = document.getElementById('take-' + k);
+      if (el && txt) { el.textContent = txt; el.style.display = 'block'; }
+    }
+    const plan = commentary.improvement_plan || [];
+    const planEl = document.getElementById('plan');
+    plan.forEach(t => {
+      const li = document.createElement('li');
+      li.textContent = t;
+      planEl.appendChild(li);
+    });
+    if (!plan.length) {
+      document.getElementById('plan').style.display = 'none';
+      document.getElementById('insights-fallback').style.display = 'block';
+    }
+  } else {
+    // No commentary at all — fall back to rule-based insights
+    document.getElementById('plan').style.display = 'none';
+    document.getElementById('insights-fallback').style.display = 'block';
+    const insEl = document.getElementById('insights');
+    (data.insights || []).forEach(t => {
+      const li = document.createElement('li');
+      li.textContent = t;
+      insEl.appendChild(li);
+    });
+  }
 
   // Snapshot link
   const path = location.pathname; // /xunji/report/<job_id>/
@@ -485,15 +593,7 @@
   });
   if (!s.prs.length) prsEl.innerHTML = '<div style="color:var(--ink-3);font-size:13px">未识别到主项 PR 记录</div>';
 
-  // ===== Insights =====
-  const insEl = document.getElementById('insights');
-  (data.insights || []).forEach(t => {
-    const li = document.createElement('li');
-    li.textContent = t;
-    insEl.appendChild(li);
-  });
-
-  // Mark page-ready for headless snapshot
+  // ===== Mark page-ready for headless snapshot =====
   document.body.dataset.ready = '1';
 })();
 </script>

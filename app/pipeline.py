@@ -98,6 +98,20 @@ def run_pipeline(api_key: str, start: str, end: str, gap: float = 1.3,
                            finished_at=datetime.utcnow().isoformat())
         raise
 
+    # Optional LLM commentary (best-effort, never fails the pipeline)
+    storage.update_job(job_id, status="commenting")
+    try:
+        from app.commentary import generate_commentary
+        report_data = json.loads((job_dir / "report_data.json").read_text())
+        c = generate_commentary(report_data, job_dir / "llm_commentary.json", timeout=120)
+        if not c:
+            (job_dir / "commentary_skipped.log").write_text("LLM returned no parseable JSON")
+    except Exception as e:
+        import traceback
+        (job_dir / "commentary_skipped.log").write_text(
+            f"commentary failed: {e}\n\n{traceback.format_exc()}"
+        )
+
     _render_html(job_dir, summary)
 
     storage.update_job(job_id, status="done", finished_at=datetime.utcnow().isoformat())

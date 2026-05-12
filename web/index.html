@@ -329,6 +329,7 @@ function parseProgress(status) {
   m = status.match(/^fetching (\d+)\/(\d+) cache:(\d+) new:(\d+) todo=(\d+)/);
   if (m) return { phase: 'fetching', cur: +m[1], total: +m[2], cache: +m[3], fresh: +m[4], todo: +m[5] };
   if (status === 'analyzing') return { phase: 'analyzing' };
+  if (status === 'commenting') return { phase: 'commenting' };
   if (status === 'fetching') return { phase: 'fetching', cur: 0, total: 1, cache: 0, fresh: 0, todo: 0 };
   return { phase: status };
 }
@@ -399,8 +400,11 @@ async function poll(job_id) {
       if (info.todo > 0) det.push('<span>剩余 <strong>' + Math.max(0, info.todo - info.fresh) + '</strong> 天</span>');
       detailEl.innerHTML = det.join('');
     } else if (info.phase === 'analyzing') {
-      fill.style.width = '94%';
+      fill.style.width = '90%';
       statusEl.textContent = '分析数据并渲染图表…';
+    } else if (info.phase === 'commenting') {
+      fill.style.width = '96%';
+      statusEl.textContent = 'AI 教练正在写点评（这一步最慢，请稍等…）';
     } else {
       statusEl.textContent = j.status;
     }
