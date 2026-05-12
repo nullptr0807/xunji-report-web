@@ -8,7 +8,7 @@ from datetime import date
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
 
@@ -29,9 +29,29 @@ class GenerateReq(BaseModel):
     end: str
 
 
+def _client_ip(request: Request) -> str:
+    """Get real client IP behind nginx reverse proxy."""
+    xff = request.headers.get("x-forwarded-for") or ""
+    if xff:
+        return xff.split(",")[0].strip()
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    return request.client.host if request.client else "unknown"
+
+
 @app.get("/", response_class=HTMLResponse)
-def index():
+def index(request: Request):
+    try:
+        storage.track_visitor(_client_ip(request))
+    except Exception:
+        pass
     return (WEB_DIR / "index.html").read_text()
+
+
+@app.get("/api/stats")
+def stats():
+    return storage.get_global_stats()
 
 
 @app.post("/api/generate")

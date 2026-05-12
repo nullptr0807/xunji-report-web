@@ -123,6 +123,7 @@ def run_pipeline(api_key: str, start: str, end: str, gap: float = 1.3,
     # the strength template will be a poor fit — hand off to dynamic LLM.
     use_dynamic = strength_time_ratio < 0.60
 
+    c_meta = None
     if use_dynamic:
         try:
             from app.commentary_dynamic import generate_dynamic_commentary
@@ -142,6 +143,8 @@ def run_pipeline(api_key: str, start: str, end: str, gap: float = 1.3,
                 (job_dir / "dynamic_skipped.log").write_text(
                     "LLM returned no parseable JSON, falling back to strength template"
                 )
+            else:
+                c_meta = c.get("_meta")
         except Exception as e:
             import traceback
             use_dynamic = False
@@ -155,6 +158,8 @@ def run_pipeline(api_key: str, start: str, end: str, gap: float = 1.3,
             c = generate_commentary(report_data, job_dir / "llm_commentary.json", timeout=120)
             if not c:
                 (job_dir / "commentary_skipped.log").write_text("LLM returned no parseable JSON")
+            else:
+                c_meta = c.get("_meta")
         except Exception as e:
             import traceback
             (job_dir / "commentary_skipped.log").write_text(
@@ -163,7 +168,30 @@ def run_pipeline(api_key: str, start: str, end: str, gap: float = 1.3,
 
     _render_html(job_dir, summary, use_dynamic=use_dynamic)
 
-    storage.update_job(job_id, status="done", finished_at=datetime.utcnow().isoformat())
+    finished_at = datetime.utcnow().isoformat()
+    # Compute duration & write back stats columns
+    try:
+        created_at = (storage.get_job(job_id) or {}).get("created_at") or finished_at
+        dur_s = (datetime.fromisoformat(finished_at) - datetime.fromisoformat(created_at)).total_seconds()
+    except Exception:
+        dur_s = None
+
+    final_summary = report_data.get("summary") or {}
+    update_fields = {
+        "status": "done",
+        "finished_at": finished_at,
+        "days_in_range": len(days),
+        "strength_minutes": final_summary.get("strength_minutes"),
+        "cardio_minutes": final_summary.get("cardio_minutes"),
+        "duration_seconds": dur_s,
+    }
+    if c_meta:
+        update_fields["prompt_chars"] = c_meta.get("prompt_chars")
+        update_fields["response_chars"] = c_meta.get("response_chars")
+    # Drop None values to avoid blowing up on schema (storage.update_job uses
+    # whatever you give it as a SQL SET column).
+    update_fields = {k: v for k, v in update_fields.items() if v is not None}
+    storage.update_job(job_id, **update_fields)
     return {
         "job_id": job_id,
         "job_dir": str(job_dir),

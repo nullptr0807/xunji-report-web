@@ -231,6 +231,10 @@ def generate_dynamic_commentary(
         return None
 
     out_path.write_text(json.dumps(parsed, ensure_ascii=False, indent=2))
+    parsed["_meta"] = {
+        "prompt_chars": len(prompt),
+        "response_chars": len(raw),
+    }
     return parsed
 
 

@@ -153,6 +153,11 @@ def generate_commentary(report_data: dict, out_path: Path, timeout: int = 90) ->
             return None
 
     out_path.write_text(json.dumps(parsed, ensure_ascii=False, indent=2))
+    # Stash token-budget info for stats aggregation
+    parsed["_meta"] = {
+        "prompt_chars": len(prompt),
+        "response_chars": len(raw),
+    }
     return parsed
 
 

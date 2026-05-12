@@ -68,12 +68,33 @@ def init_db():
         finished_at TEXT,
         quota_refunded INTEGER DEFAULT 0,
         cancel_requested INTEGER DEFAULT 0,
+        days_in_range INTEGER,
+        strength_minutes REAL,
+        cardio_minutes REAL,
+        prompt_chars INTEGER,
+        response_chars INTEGER,
+        duration_seconds REAL,
         FOREIGN KEY(key_hash) REFERENCES users(key_hash)
+    );
+    CREATE TABLE IF NOT EXISTS visitors (
+        ip_hash TEXT PRIMARY KEY,
+        first_seen TEXT NOT NULL,
+        last_seen TEXT NOT NULL,
+        hit_count INTEGER NOT NULL DEFAULT 1
     );
     """)
     conn.commit()
-    # Migration: add column if missing on old DBs
-    for col in ("quota_refunded INTEGER DEFAULT 0", "cancel_requested INTEGER DEFAULT 0"):
+    # Migration: add columns if missing on old DBs
+    for col in (
+        "quota_refunded INTEGER DEFAULT 0",
+        "cancel_requested INTEGER DEFAULT 0",
+        "days_in_range INTEGER",
+        "strength_minutes REAL",
+        "cardio_minutes REAL",
+        "prompt_chars INTEGER",
+        "response_chars INTEGER",
+        "duration_seconds REAL",
+    ):
         try:
             conn.execute(f"ALTER TABLE jobs ADD COLUMN {col}")
             conn.commit()
@@ -211,3 +232,84 @@ def check_quota(api_key: str) -> tuple[bool, int, int]:
         return True, 0, -1  # -1 sentinel = unlimited
     used = count_jobs_today(kh)
     return used < DAILY_LIMIT_PER_KEY, used, DAILY_LIMIT_PER_KEY
+
+
+
+# ===== Visitor tracking & global stats =====
+def _ip_hash(ip: str) -> str:
+    return hashlib.sha256((ip or "unknown").encode()).hexdigest()[:16]
+
+
+def track_visitor(ip: str):
+    """Record a unique visitor (hashed IP). Counts hits on existing rows."""
+    init_db()
+    ih = _ip_hash(ip)
+    now = datetime.utcnow().isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        conn.execute(
+            "INSERT INTO visitors(ip_hash,first_seen,last_seen,hit_count) VALUES(?,?,?,1)",
+            (ih, now, now),
+        )
+    except sqlite3.IntegrityError:
+        conn.execute(
+            "UPDATE visitors SET last_seen=?, hit_count=hit_count+1 WHERE ip_hash=?",
+            (now, ih),
+        )
+    conn.commit()
+    conn.close()
+
+
+def get_global_stats() -> dict:
+    """Aggregate stats for the public footer."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    n_visitors = c.execute("SELECT COUNT(*) FROM visitors").fetchone()[0]
+    n_keys = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    n_reports_done = c.execute("SELECT COUNT(*) FROM jobs WHERE status='done'").fetchone()[0]
+
+    avg_days = c.execute(
+        "SELECT AVG(days_in_range) FROM jobs WHERE status='done' AND days_in_range IS NOT NULL"
+    ).fetchone()[0]
+
+    # Per-key avg jobs (engagement proxy — not training freq, which would need
+    # per-job session counts we don't store separately).
+    avg_jobs_per_key = (n_reports_done / n_keys) if n_keys else 0
+
+    sm = c.execute(
+        "SELECT COALESCE(SUM(strength_minutes),0), COALESCE(SUM(cardio_minutes),0) FROM jobs WHERE status='done'"
+    ).fetchone()
+    strength_total, cardio_total = sm
+    total_min = (strength_total or 0) + (cardio_total or 0)
+    aerobic_ratio = (cardio_total / total_min) if total_min else None
+
+    pc = c.execute(
+        "SELECT COALESCE(SUM(prompt_chars),0), COALESCE(SUM(response_chars),0), "
+        "COUNT(*) FILTER (WHERE prompt_chars IS NOT NULL) FROM jobs WHERE status='done'"
+    ).fetchone()
+    prompt_chars_total, response_chars_total, n_with_tokens = pc
+    total_chars = (prompt_chars_total or 0) + (response_chars_total or 0)
+    # Token estimate: CJK-heavy text ~ chars/1.8. Use /2 conservatively.
+    est_tokens_total = int(total_chars / 2) if total_chars else 0
+    est_tokens_per_report = int(est_tokens_total / n_with_tokens) if n_with_tokens else 0
+
+    avg_duration_s = c.execute(
+        "SELECT AVG(duration_seconds) FROM jobs WHERE status='done' AND duration_seconds IS NOT NULL"
+    ).fetchone()[0]
+
+    conn.close()
+
+    return {
+        "visitors": n_visitors,
+        "unique_keys": n_keys,
+        "reports_generated": n_reports_done,
+        "avg_days_per_report": round(avg_days, 1) if avg_days else 0,
+        "avg_jobs_per_key": round(avg_jobs_per_key, 2),
+        "aerobic_ratio": round(aerobic_ratio, 3) if aerobic_ratio is not None else None,
+        "anaerobic_ratio": round(1 - aerobic_ratio, 3) if aerobic_ratio is not None else None,
+        "est_tokens_total": est_tokens_total,
+        "est_tokens_per_report": est_tokens_per_report,
+        "avg_duration_seconds": round(avg_duration_s, 1) if avg_duration_s else 0,
+    }
