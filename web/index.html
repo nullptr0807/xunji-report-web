@@ -324,7 +324,9 @@ f.onsubmit = async (e) => {
   }
   const resp = await res.json();
   const {job_id, quota_used, quota_limit} = resp;
-  if (quota_used && quota_limit) {
+  if (quota_limit === -1) {
+    detailEl.innerHTML = '<span>白名单 · <strong>无限额</strong></span>';
+  } else if (quota_used && quota_limit) {
     detailEl.innerHTML = '<span>今日配额 <strong>' + quota_used + '/' + quota_limit + '</strong></span>';
   }
   poll(job_id);

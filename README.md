@@ -65,8 +65,11 @@ python -m app.pipeline --key xjllm_XXX --start 2025-01-01 --end 2025-12-31
 ## 🔒 安全说明
 
 - API Key 通过 HTTPS 传输，服务端用 **Fernet** 加密落盘，`MASTER_KEY` 不进 git
-- 训练数据 / 报告保留 30 天，到期自动清理（cron 自行配置）
+- 训练数据 / 报告保留 7 天，到期自动清理（cron 在 03:00 跑 `app/cleanup.py`）
 - 报告链接为 22 字符 URL-safe 随机串（128-bit 熵），无登录但需知道链接才能访问
+- **每日配额**：同一 API Key 24h 最多 3 次报告（避免 LLM 成本爆炸）
+- **白名单**：在 `.env` 设 `WHITELIST_KEY_HASHES=<hash1>,<hash2>` 即可免限额。
+  用 `python scripts/whitelist_hash.py xjllm_xxx` 计算 hash（仅存 hash，不存原 key）
 - 用户可随时在训记 App 端吊销 Key
 
 ## 📁 项目结构

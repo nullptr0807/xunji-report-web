@@ -172,6 +172,13 @@ def get_job(job_id: str) -> dict | None:
 # ===== Rate limiting =====
 DAILY_LIMIT_PER_KEY = 3
 
+# Whitelist: key_hash values that bypass the daily quota.
+# Configure via env WHITELIST_KEY_HASHES="hash1,hash2" (comma-separated key_hash() values).
+# Use scripts/whitelist_hash.py to compute a hash from a raw API key.
+_WHITELIST = {
+    h.strip() for h in os.environ.get("WHITELIST_KEY_HASHES", "").split(",") if h.strip()
+}
+
 
 def count_jobs_today(key_hash_value: str) -> int:
     """Count jobs created in the last 24h for this key."""
@@ -189,7 +196,9 @@ def count_jobs_today(key_hash_value: str) -> int:
 
 
 def check_quota(api_key: str) -> tuple[bool, int, int]:
-    """Return (allowed, used_today, limit)."""
+    """Return (allowed, used_today, limit). Whitelisted keys always allowed."""
     kh = key_hash(api_key)
+    if kh in _WHITELIST:
+        return True, 0, -1  # -1 sentinel = unlimited
     used = count_jobs_today(kh)
     return used < DAILY_LIMIT_PER_KEY, used, DAILY_LIMIT_PER_KEY
