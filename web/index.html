@@ -331,8 +331,7 @@
     <button type="submit" class="primary" id="btn">生成报告</button>
 
     <div class="notice">
-      <p><strong>每日 3 次配额</strong>：同一 API Key 24 小时内最多生成 3 份报告（含 AI 教练点评），
-      避免无限制调用 LLM 烧穿成本。</p>
+      <p><strong>每日 3 次配额</strong>：同一 API Key 24 小时内最多生成 3 份报告（含 AI 教练点评）。</p>
       <p style="margin-top:8px"><strong>数据保留 7 天</strong>：为了让你短期内重复生成报告时不必重复下载训练数据，
       已下载的数据会在服务器上缓存 <strong>7 天</strong>，到期自动清除。</p>
       <p style="margin-top:8px">本服务仅将你的数据用于<strong>本次报告分析与展示</strong>，
@@ -655,14 +654,9 @@ function fmtDuration(s) {
       ? 'Token 消耗（真实）'
       : 'Token 消耗（估算）';
     const items = [
-      { k: '独立访客', v: fmtNum(s.visitors) },
-      { k: '已分析 API Key', v: fmtNum(s.unique_keys) },
       { k: '已生成报告', v: fmtNum(s.reports_generated) },
-      { k: '人均报告数', v: s.avg_jobs_per_key.toFixed(2), u: '次' },
       { k: '平均覆盖天数', v: s.avg_days_per_report, u: '天' },
       { k: '有氧 : 力量', v: aero },
-      { k: tokenLabel, v: fmtTokens(s.est_tokens_total) },
-      { k: '单份 Token', v: fmtTokens(s.est_tokens_per_report) },
       { k: '平均生成耗时', v: fmtDuration(s.avg_duration_seconds) },
     ];
     const grid = document.getElementById('stats-grid');
