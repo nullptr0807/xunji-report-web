@@ -21,6 +21,7 @@ PROMPT = """你是一位毒舌但精准的健身教练 / 数据评论员。下�
 - **有趣**：可以用反讽、类比、网络梗（适度）、生活化比喻（"像股票回撤"、"打卡机"、"摆烂"）
 - 不要 AI 味：不要"首先/其次/总之"、不要"加油！"煽情、不要 emoji、不要排比句、不要"建议你…"这种端着的口吻
 - 不要列表式（除了 improvement_plan）
+- **严格 JSON**：字符串值内部禁止使用英文直引号 `"`，需要引用短语时一律用中文「」或单引号 `'`，否则 JSON 解析会失败
 
 只输出一个 JSON 对象，不要包裹 markdown 代码块：
 
@@ -80,6 +81,13 @@ def generate_commentary(report_data: dict, out_path: Path, timeout: int = 90) ->
         return None
 
     raw = (result.stdout or "").strip()
+    # Debug: persist raw output next to out_path for postmortem
+    try:
+        (out_path.parent / "llm_raw.txt").write_text(
+            f"RC={result.returncode}\nSTDERR:\n{result.stderr or ''}\n\nSTDOUT:\n{raw}"
+        )
+    except Exception:
+        pass
     if not raw:
         return None
 
@@ -103,7 +111,45 @@ def generate_commentary(report_data: dict, out_path: Path, timeout: int = 90) ->
     try:
         parsed = json.loads(raw_clean[start:end+1])
     except json.JSONDecodeError:
-        return None
+        # Salvage: LLM sometimes embeds straight " quotes inside string values,
+        # e.g. "样本仅 2 天却敢标"每周 7 次"——..." -> breaks JSON. Any " whose
+        # next non-space char is not one of , ] } : (i.e. not a real string
+        # terminator) is treated as a stray inner quote and backslash-escaped.
+        candidate = raw_clean[start:end+1]
+
+        def _escape_stray_quotes(s: str) -> str:
+            out = []
+            i = 0
+            in_str = False
+            while i < len(s):
+                c = s[i]
+                if c == '\\' and in_str and i + 1 < len(s):
+                    out.append(c); out.append(s[i+1]); i += 2; continue
+                if c == '"':
+                    if not in_str:
+                        in_str = True
+                        out.append(c)
+                    else:
+                        # Look ahead past whitespace
+                        k = i + 1
+                        while k < len(s) and s[k] in ' \t\r\n':
+                            k += 1
+                        nxt = s[k] if k < len(s) else ''
+                        if nxt in ',]}:' or nxt == '':
+                            in_str = False
+                            out.append(c)
+                        else:
+                            # Stray inner quote — escape it
+                            out.append('\\"')
+                    i += 1
+                else:
+                    out.append(c); i += 1
+            return ''.join(out)
+
+        try:
+            parsed = json.loads(_escape_stray_quotes(candidate))
+        except json.JSONDecodeError:
+            return None
 
     out_path.write_text(json.dumps(parsed, ensure_ascii=False, indent=2))
     return parsed
