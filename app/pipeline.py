@@ -42,8 +42,17 @@ def run_pipeline(api_key: str, start: str, end: str, gap: float = 1.3,
     cache_dir = storage.DATA_DIR / "cache" / kh
     cache_dir.mkdir(parents=True, exist_ok=True)
 
+    # ===== Pre-scan: how many days are already cached =====
+    pre_cached = [d for d in days if (cache_dir / f"{d.isoformat()}.json").exists()]
+    to_fetch = [d for d in days if not (cache_dir / f"{d.isoformat()}.json").exists()]
+    storage.update_job(
+        job_id,
+        status=f"planning total={len(days)} cached={len(pre_cached)} todo={len(to_fetch)}",
+    )
+
     n_fetched = n_cached = n_with_data = 0
     errors = []
+    total = len(days)
     for i, day in enumerate(days):
         ds = day.isoformat()
         cache_path = cache_dir / f"{ds}.json"
@@ -61,7 +70,10 @@ def run_pipeline(api_key: str, start: str, end: str, gap: float = 1.3,
             except Exception as e:
                 errors.append({"date": ds, "error": str(e)})
                 time.sleep(gap)
-                storage.update_job(job_id, status=f"fetching {i+1}/{len(days)} (cache:{n_cached} new:{n_fetched})")
+                storage.update_job(
+                    job_id,
+                    status=f"fetching {i+1}/{total} cache:{n_cached} new:{n_fetched} todo={len(to_fetch)}",
+                )
                 continue
             cache_path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
             n_fetched += 1
@@ -73,7 +85,10 @@ def run_pipeline(api_key: str, start: str, end: str, gap: float = 1.3,
         (parsed_dir / f"{ds}.json").write_text(json.dumps(parsed, ensure_ascii=False, indent=2))
         if data.get("res"):
             n_with_data += 1
-        storage.update_job(job_id, status=f"fetching {i+1}/{len(days)} (cache:{n_cached} new:{n_fetched})")
+        storage.update_job(
+            job_id,
+            status=f"fetching {i+1}/{total} cache:{n_cached} new:{n_fetched} todo={len(to_fetch)}",
+        )
 
     storage.update_job(job_id, status="analyzing")
     try:
